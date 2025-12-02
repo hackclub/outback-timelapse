@@ -325,7 +325,7 @@ app.get('/stream/:userId/:challengeNum', (req, res) => {
 <html>
 <head>
   <title>Stream - ${streamKey}</title>
-  <script src="${req.protocol}://${req.get('host')}/socket.io/socket.io.js"></script>
+  <script src="${getProtocol(req)}://${req.get('host')}/socket.io/socket.io.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -542,6 +542,17 @@ app.get('/stream/:userId/:challengeNum', (req, res) => {
   res.send(html);
 });
 
+// Helper to get the correct protocol (handles reverse proxies)
+function getProtocol(req) {
+  // Check for X-Forwarded-Proto header (set by reverse proxies like Coolify)
+  const forwardedProto = req.get('x-forwarded-proto');
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim();
+  }
+  // Check if connection is secure
+  return req.secure ? 'https' : req.protocol;
+}
+
 // Endpoint to watch recorded stream - returns HLS playlist as API
 app.get('/watch/:userId/:challengeNum', (req, res) => {
   const { userId, challengeNum } = req.params;
@@ -566,8 +577,9 @@ app.get('/watch/:userId/:challengeNum', (req, res) => {
   // Read and serve the playlist file
   let playlistContent = fs.readFileSync(playlistPath, 'utf8');
   
-  // Update segment paths to be absolute URLs
-  const baseUrl = `${req.protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
+  // Update segment paths to be absolute URLs with correct protocol
+  const protocol = getProtocol(req);
+  const baseUrl = `${protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
   // Replace relative segment paths with absolute URLs
   playlistContent = playlistContent.replace(/^(segment_\d+\.ts)$/gm, baseUrl + '$1');
   // Also handle paths that might already have a partial path
@@ -604,7 +616,8 @@ app.get('/timelapse/:userId/:challengeNum', (req, res) => {
     let playlistContent = fs.readFileSync(timelapsePlaylist, 'utf8');
     
     // Update segment paths to be absolute URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
+    const protocol = getProtocol(req);
+    const baseUrl = `${protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
     // Replace relative segment paths with absolute URLs
     playlistContent = playlistContent.replace(/^(timelapse_segment_\d+\.ts)$/gm, baseUrl + '$1');
     // Also handle paths that might already have a partial path
@@ -641,8 +654,9 @@ app.get('/timelapse/:userId/:challengeNum', (req, res) => {
     // Read and serve the playlist file
     let playlistContent = fs.readFileSync(playlistPath, 'utf8');
     
-    // Update segment paths to be absolute URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
+    // Update segment paths to be absolute URLs with correct protocol
+    const protocol = getProtocol(req);
+    const baseUrl = `${protocol}://${req.get('host')}/recordings/${userId}_${challengeNum}/`;
     // Replace relative segment paths with absolute URLs
     playlistContent = playlistContent.replace(/^(timelapse_segment_\d+\.ts)$/gm, baseUrl + '$1');
     // Also handle paths that might already have a partial path

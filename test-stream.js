@@ -1,7 +1,7 @@
 const io = require('socket.io-client');
 const fs = require('fs');
 
-const STREAMING_SERVER = process.env.STREAMING_SERVER || 'http://localhost:3001';
+const STREAMING_SERVER = process.env.STREAMING_SERVER || 'https://tkg8wsk0o8cc8scsw4cwk88s.a.selfhosted.hackclub.com';
 const userId = 'TEST_USER';
 const challengeNum = '999';
 const TEST_VIDEO = '/tmp/test_video.webm';
