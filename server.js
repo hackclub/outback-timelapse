@@ -325,7 +325,7 @@ app.get('/stream/:userId/:challengeNum', (req, res) => {
 <html>
 <head>
   <title>Stream - ${streamKey}</title>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="${req.protocol}://${req.get('host')}/socket.io/socket.io.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -400,7 +400,8 @@ app.get('/stream/:userId/:challengeNum', (req, res) => {
   </div>
 
   <script>
-    const socket = io();
+    // Connect to Socket.io server
+    const socket = io(window.location.origin);
     const userId = '${userId}';
     const challengeNum = '${challengeNum}';
     let localStream = null;
