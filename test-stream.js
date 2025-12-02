@@ -1,7 +1,7 @@
 const io = require('socket.io-client');
 const fs = require('fs');
 
-const STREAMING_SERVER = 'https://tkg8wsk0o8cc8scsw4cwk88s.a.selfhosted.hackclub.com';
+const STREAMING_SERVER = process.env.STREAMING_SERVER || 'http://localhost:3001';
 const userId = 'TEST_USER';
 const challengeNum = '999';
 const TEST_VIDEO = '/tmp/test_video.webm';
@@ -67,8 +67,11 @@ socket.on('stream-stopped', () => {
   console.log('Waiting 5 seconds for server to process...');
   setTimeout(() => {
     console.log('\nTesting watch endpoint...');
+    const http = require('http');
     const https = require('https');
-    https.get(`${STREAMING_SERVER}/watch/${userId}/${challengeNum}`, (res) => {
+    const url = new URL(`${STREAMING_SERVER}/watch/${userId}/${challengeNum}`);
+    const client = url.protocol === 'https:' ? https : http;
+    client.get(`${STREAMING_SERVER}/watch/${userId}/${challengeNum}`, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
@@ -81,7 +84,7 @@ socket.on('stream-stopped', () => {
         }
         
         console.log('\nTesting timelapse endpoint...');
-        https.get(`${STREAMING_SERVER}/timelapse/${userId}/${challengeNum}`, (res2) => {
+        client.get(`${STREAMING_SERVER}/timelapse/${userId}/${challengeNum}`, (res2) => {
           let data2 = '';
           res2.on('data', (chunk) => { data2 += chunk; });
           res2.on('end', () => {
