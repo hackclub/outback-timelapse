@@ -187,76 +187,9 @@ io.on('connection', (socket) => {
       challengeNum,
       startTime: Date.now(),
       recordingPath,
-      writeStream
+      writeStream,
+      ffmpegStarted: false
     });
-
-    // Start FFmpeg process to transcode to HLS
-    // Use a small delay to ensure some data is written before FFmpeg starts
-    setTimeout(() => {
-      const ffmpegProcess = ffmpeg(inputFile)
-        .inputOptions([
-          '-fflags', '+genpts+discardcorrupt',
-          '-flags', 'low_delay',
-          '-strict', 'experimental',
-          '-analyzeduration', '1000000',
-          '-probesize', '1000000'
-        ])
-        .outputOptions([
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-tune', 'zerolatency',
-          '-c:a', 'aac',
-          '-f', 'hls',
-          '-hls_time', '2',
-          '-hls_list_size', '5',
-          '-hls_flags', 'delete_segments+append_list',
-          '-hls_segment_filename', path.join(recordingPath, 'segment_%03d.ts'),
-          '-hls_playlist_type', 'event',
-          '-start_number', '0'
-        ])
-        .output(outputPlaylist)
-        .on('start', (commandLine) => {
-          console.log(`FFmpeg started for ${streamKey}`);
-        })
-        .on('error', (err) => {
-          console.error(`FFmpeg error for ${streamKey}:`, err.message);
-          // Try to restart FFmpeg if it fails
-          if (activeStreams.has(streamKey)) {
-            setTimeout(() => {
-              if (activeStreams.has(streamKey)) {
-                console.log(`Retrying FFmpeg for ${streamKey}`);
-                const retryProcess = ffmpeg(inputFile)
-                  .inputOptions([
-                    '-fflags', '+genpts+discardcorrupt',
-                    '-flags', 'low_delay',
-                    '-strict', 'experimental'
-                  ])
-                  .outputOptions([
-                    '-c:v', 'libx264',
-                    '-preset', 'ultrafast',
-                    '-tune', 'zerolatency',
-                    '-c:a', 'aac',
-                    '-f', 'hls',
-                    '-hls_time', '2',
-                    '-hls_list_size', '5',
-                    '-hls_flags', 'delete_segments+append_list',
-                    '-hls_segment_filename', path.join(recordingPath, 'segment_%03d.ts'),
-                    '-hls_playlist_type', 'event'
-                  ])
-                  .output(outputPlaylist)
-                  .run();
-                ffmpegProcesses.set(streamKey, retryProcess);
-              }
-            }, 2000);
-          }
-        })
-        .on('end', () => {
-          console.log(`FFmpeg finished for ${streamKey}`);
-        });
-
-      ffmpegProcess.run();
-      ffmpegProcesses.set(streamKey, ffmpegProcess);
-    }, 2000);
 
     socket.join(streamKey);
     socket.emit('stream-ready', { streamKey });
@@ -270,6 +203,83 @@ io.on('connection', (socket) => {
       // Write chunk to file
       const buffer = Buffer.from(chunk, 'base64');
       streamInfo.writeStream.write(buffer);
+      
+      // Start FFmpeg on first chunk (or after a few chunks)
+      if (!streamInfo.ffmpegStarted && !ffmpegProcesses.has(streamKey)) {
+        streamInfo.ffmpegStarted = true;
+        // Wait a bit to ensure we have valid WebM headers
+        setTimeout(() => {
+          const recordingPath = streamInfo.recordingPath;
+          const inputFile = path.join(recordingPath, 'input.webm');
+          const outputPlaylist = path.join(recordingPath, 'playlist.m3u8');
+          
+          // Check if file exists and has some data
+          try {
+            const stats = fs.statSync(inputFile);
+            if (stats.size < 100) {
+              // File too small, wait a bit more
+              streamInfo.ffmpegStarted = false;
+              return;
+            }
+          } catch (e) {
+            // File doesn't exist yet
+            streamInfo.ffmpegStarted = false;
+            return;
+          }
+
+          const ffmpegProcess = ffmpeg(inputFile)
+            .inputOptions([
+              '-fflags', '+genpts+discardcorrupt',
+              '-flags', 'low_delay',
+              '-strict', 'experimental',
+              '-analyzeduration', '1000000',
+              '-probesize', '1000000'
+            ])
+            .outputOptions([
+              '-c:v', 'libx264',
+              '-preset', 'ultrafast',
+              '-tune', 'zerolatency',
+              '-c:a', 'aac',
+              '-f', 'hls',
+              '-hls_time', '2',
+              '-hls_list_size', '5',
+              '-hls_flags', 'delete_segments+append_list',
+              '-hls_segment_filename', path.join(recordingPath, 'segment_%03d.ts'),
+              '-hls_playlist_type', 'event',
+              '-start_number', '0'
+            ])
+            .output(outputPlaylist)
+            .on('start', (commandLine) => {
+              console.log(`FFmpeg started for ${streamKey}`);
+            })
+            .on('error', (err) => {
+              console.error(`FFmpeg error for ${streamKey}:`, err.message);
+              ffmpegProcesses.delete(streamKey);
+              if (streamInfo) {
+                streamInfo.ffmpegStarted = false;
+              }
+              // Try to restart FFmpeg if it fails and stream is still active
+              if (activeStreams.has(streamKey)) {
+                setTimeout(() => {
+                  if (activeStreams.has(streamKey) && !ffmpegProcesses.has(streamKey)) {
+                    console.log(`Retrying FFmpeg for ${streamKey}`);
+                    // Will retry on next chunk
+                    if (streamInfo) {
+                      streamInfo.ffmpegStarted = false;
+                    }
+                  }
+                }, 2000);
+              }
+            })
+            .on('end', () => {
+              console.log(`FFmpeg finished for ${streamKey}`);
+              ffmpegProcesses.delete(streamKey);
+            });
+
+          ffmpegProcess.run();
+          ffmpegProcesses.set(streamKey, ffmpegProcess);
+        }, 1000);
+      }
     }
   });
 
