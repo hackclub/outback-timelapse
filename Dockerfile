@@ -14,7 +14,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci --only=production
+# Use npm install if package-lock.json doesn't exist, otherwise use npm ci for faster, reliable builds
+RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --only=production; fi
 
 # Copy application files
 COPY server.js ./
