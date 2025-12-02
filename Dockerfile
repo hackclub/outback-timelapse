@@ -4,6 +4,9 @@ FROM node:20-alpine
 # Install FFmpeg (required for video transcoding)
 RUN apk add --no-cache ffmpeg
 
+# Verify FFmpeg installation
+RUN ffmpeg -version || (echo "FFmpeg installation failed" && exit 1)
+
 # Set working directory
 WORKDIR /app
 

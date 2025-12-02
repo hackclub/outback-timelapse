@@ -46,4 +46,3 @@ docker run -p 3000:3000 outback-streaming
 
 Recordings are stored in the `recordings/` directory as HLS playlists and segments. Each recording is organized by `userId_challengeNum`.
 
-# outback-timelapse

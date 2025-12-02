@@ -7,6 +7,45 @@ const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 
+// Set FFmpeg path (for Docker/Alpine Linux)
+// In Alpine, FFmpeg is typically at /usr/bin/ffmpeg
+const { execSync } = require('child_process');
+let ffmpegPath = null;
+
+// Try common locations for FFmpeg binary (Alpine Linux default is /usr/bin/ffmpeg)
+const commonPaths = ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/bin/ffmpeg'];
+for (const p of commonPaths) {
+  if (fs.existsSync(p)) {
+    ffmpegPath = p;
+    break;
+  }
+}
+
+// If not found in common paths, try to find it in PATH
+if (!ffmpegPath) {
+  try {
+    ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8', timeout: 2000 }).trim();
+  } catch (e) {
+    // which command failed, continue with common paths check
+  }
+}
+
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  console.log(`FFmpeg path set to: ${ffmpegPath}`);
+  
+  // Verify FFmpeg is accessible
+  try {
+    execSync(`${ffmpegPath} -version`, { timeout: 2000 });
+    console.log('FFmpeg is accessible and working');
+  } catch (e) {
+    console.error('Warning: FFmpeg binary found but not executable:', e.message);
+  }
+} else {
+  console.error('ERROR: Could not find FFmpeg binary. Timelapse generation will fail.');
+  console.error('Searched paths:', commonPaths);
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
